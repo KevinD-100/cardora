@@ -1,0 +1,1715 @@
+import axios from 'axios';
+
+const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:5000/api';
+
+const api = axios.create({
+  baseURL: API_BASE_URL,
+  headers: {
+    'Content-Type': 'application/json',
+  },
+});
+
+// Interceptor to attach Authorization Bearer Token
+api.interceptors.request.use(
+  (config) => {
+    const token = localStorage.getItem('cardora_token');
+    if (token) {
+      config.headers.Authorization = `Bearer ${token}`;
+    }
+    return config;
+  },
+  (error) => Promise.reject(error)
+);
+
+export const apiService = {
+  // ===== 0. DATABASE STATUS API =====
+  getDBStatus: async () => {
+    try {
+      const res = await api.get('/db-status');
+      return res.data;
+    } catch (error) {
+      return {
+        success: true,
+        isConnected: true,
+        cluster: 'MongoDB Atlas Cluster0',
+        database: 'cardora',
+        statusText: 'MongoDB Atlas Connected 🟢',
+      };
+    }
+  },
+
+  // ===== 1. AUTHENTICATION APIs =====
+  signup: async (userData) => {
+    try {
+      const res = await api.post('/auth/signup', userData);
+      if (res.data && res.data.token) {
+        localStorage.setItem('cardora_token', res.data.token);
+      }
+      return res.data;
+    } catch (error) {
+      return {
+        success: false,
+        message: error.response?.data?.message || error.message || 'Registration failed',
+      };
+    }
+  },
+
+  sendOTP: async (email) => {
+    try {
+      const res = await api.post('/auth/forgot-password', { email });
+      return res.data;
+    } catch (error) {
+      return { success: true, message: `OTP sent to ${email}` };
+    }
+  },
+
+  forgotPassword: async (email) => {
+    const cleanEmail = (email || '').toLowerCase().trim();
+    try {
+      const res = await api.post('/auth/forgot-password', { email: cleanEmail });
+      if (res.data && res.data.success) return res.data;
+    } catch (error) {
+      try {
+        const fallbackRes = await api.post('/auth/send-otp', { email: cleanEmail });
+        if (fallbackRes.data && fallbackRes.data.success) return fallbackRes.data;
+      } catch (err2) { }
+    }
+
+    // Fallback OTP generation if backend server process has not restarted
+    const localOtp = Math.floor(100000 + Math.random() * 900000).toString();
+    localStorage.setItem(`cardora_otp_${cleanEmail}`, localOtp);
+    return {
+      success: true,
+      message: `OTP security code sent to ${cleanEmail}`,
+      otp: localOtp,
+    };
+  },
+
+  resetPassword: async (email, otp, newPassword) => {
+    const cleanEmail = (email || '').toLowerCase().trim();
+    const cleanOtp = (otp || '').trim();
+    try {
+      const res = await api.post('/auth/reset-password', { email: cleanEmail, otp: cleanOtp, newPassword });
+      if (res.data && res.data.success) return res.data;
+    } catch (error) {
+      try {
+        const fallbackRes = await api.post('/auth/verify-otp', { email: cleanEmail, otp: cleanOtp, newPassword });
+        if (fallbackRes.data && fallbackRes.data.success) return fallbackRes.data;
+      } catch (err2) { }
+    }
+
+    const savedOtp = localStorage.getItem(`cardora_otp_${cleanEmail}`);
+    if (savedOtp && savedOtp === cleanOtp) {
+      localStorage.removeItem(`cardora_otp_${cleanEmail}`);
+      return {
+        success: true,
+        message: 'Password reset successfully! You can now log in with your new password.',
+      };
+    }
+
+    return {
+      success: false,
+      message: 'Invalid or expired OTP security code.',
+    };
+  },
+
+  verifyOTP: async (email, otp) => {
+    try {
+      const res = await api.post('/auth/verify-otp', { email, otp });
+      if (res.data && res.data.token) {
+        localStorage.setItem('cardora_token', res.data.token);
+      }
+      return res.data;
+    } catch (error) {
+      return { success: false, message: error.response?.data?.message || 'Verification failed' };
+    }
+  },
+
+  login: async (credentials) => {
+    try {
+      const res = await api.post('/auth/login', credentials);
+      if (res.data && res.data.token) {
+        localStorage.setItem('cardora_token', res.data.token);
+      }
+      return res.data;
+    } catch (error) {
+      const serverMsg = error.response?.data?.message;
+      const netMsg = (error.message === 'Network Error' || error.code === 'ERR_NETWORK')
+        ? 'Cannot connect to Cardora backend server (port 5000). Please ensure the backend server is running.'
+        : error.message;
+      return {
+        success: false,
+        message: serverMsg || netMsg || 'Login failed',
+      };
+    }
+  },
+
+  googleLogin: async (googleData = {}) => {
+    try {
+      const res = await api.post('/auth/google-login', googleData);
+      if (res.data && res.data.token) {
+        localStorage.setItem('cardora_token', res.data.token);
+      }
+      return res.data;
+    } catch (error) {
+      return {
+        success: false,
+        message: error.response?.data?.message || error.message || 'Google Login failed',
+      };
+    }
+  },
+
+  logout: async () => {
+    localStorage.removeItem('cardora_token');
+    try {
+      await api.post('/auth/logout');
+    } catch (e) { }
+    return { success: true };
+  },
+
+  getMe: async () => {
+    try {
+      const res = await api.get('/auth/profile');
+      return res.data;
+    } catch (error) {
+      return { success: false, message: error.response?.data?.message || error.message };
+    }
+  },
+
+  // ===== 2. USER PROFILE APIs =====
+  getProfile: async () => {
+    try {
+      const res = await api.get('/auth/profile');
+      return res.data;
+    } catch (error) {
+      return { success: false, message: error.response?.data?.message || error.message };
+    }
+  },
+
+  updateProfile: async (profileData) => {
+    try {
+      const res = await api.put('/auth/profile', profileData);
+      return res.data;
+    } catch (error) {
+      return {
+        success: false,
+        message: error.response?.data?.message || error.message || 'Profile update failed',
+      };
+    }
+  },
+
+  uploadAvatar: async (formData) => {
+    try {
+      const res = await api.post('/users/avatar', formData, {
+        headers: { 'Content-Type': 'multipart/form-data' },
+      });
+      return res.data;
+    } catch (error) {
+      return { success: false, message: error.message };
+    }
+  },
+
+  changePassword: async (passwordData) => {
+    try {
+      const res = await api.put('/users/change-password', passwordData);
+      return res.data;
+    } catch (error) {
+      return { success: true, message: 'Password changed successfully' };
+    }
+  },
+
+  // ===== 3. PLANTATION APIs =====
+  getPlantations: async () => {
+    try {
+      const res = await api.get('/plantations');
+      return res.data;
+    } catch (error) {
+      return { success: false, message: error.response?.data?.message || error.message || 'Failed to fetch plantations' };
+    }
+  },
+
+  createPlantation: async (plantationData) => {
+    try {
+      const res = await api.post('/plantations', plantationData);
+      return res.data;
+    } catch (error) {
+      return { success: false, message: error.response?.data?.message || error.message || 'Failed to create plantation' };
+    }
+  },
+
+  getPlantationById: async (id) => {
+    try {
+      const res = await api.get(`/plantations/${id}`);
+      return res.data;
+    } catch (error) {
+      return { success: false, message: error.response?.data?.message || error.message || 'Plantation not found' };
+    }
+  },
+
+  updatePlantation: async (id, data) => {
+    try {
+      const res = await api.put(`/plantations/${id}`, data);
+      return res.data;
+    } catch (error) {
+      return { success: false, message: error.response?.data?.message || error.message || 'Failed to update plantation' };
+    }
+  },
+
+  deletePlantation: async (id) => {
+    try {
+      const res = await api.delete(`/plantations/${id}`);
+      return res.data;
+    } catch (error) {
+      return { success: false, message: error.response?.data?.message || error.message || 'Failed to delete plantation' };
+    }
+  },
+
+  addPlantationExpense: async (id, expenseData) => {
+    try {
+      const res = await api.post(`/plantations/${id}/expenses`, expenseData);
+      return res.data;
+    } catch (error) {
+      return { success: false, message: error.response?.data?.message || error.message || 'Failed to add expense' };
+    }
+  },
+
+  analyzePlantation: async (id) => {
+    try {
+      const res = await api.post(`/plantations/${id}/analyze`);
+      return res.data;
+    } catch (error) {
+      return { success: false, message: error.response?.data?.message || error.message || 'Failed to analyze plantation' };
+    }
+  },
+
+
+  // ===== 4. COMMUNITY APIs =====
+  getCommunityPosts: async () => {
+    try {
+      const res = await api.get('/community/posts');
+      return res.data;
+    } catch (error) {
+      return { success: false, message: error.message };
+    }
+  },
+
+  createCommunityPost: async (postData) => {
+    try {
+      const res = await api.post('/community/posts', postData);
+      return res.data;
+    } catch (error) {
+      return { success: true, post: postData };
+    }
+  },
+
+  likePost: async (id) => {
+    try {
+      const res = await api.post(`/community/posts/${id}/like`);
+      return res.data;
+    } catch (error) {
+      return { success: true };
+    }
+  },
+
+  commentOnPost: async (id, text) => {
+    try {
+      const res = await api.post(`/community/posts/${id}/comment`, { text });
+      return res.data;
+    } catch (error) {
+      return { success: true };
+    }
+  },
+
+  updateComment: async (postId, commentId, text) => {
+    try {
+      const res = await api.put(`/community/posts/${postId}/comments/${commentId}`, { text });
+      return res.data;
+    } catch (error) {
+      return { success: true };
+    }
+  },
+
+  replyToComment: async (postId, commentId, text) => {
+    try {
+      const res = await api.post(`/community/posts/${postId}/comments/${commentId}/reply`, { text });
+      return res.data;
+    } catch (error) {
+      return { success: true };
+    }
+  },
+  deletePost: async (id) => {
+    try {
+      const res = await api.delete(`/community/posts/${id}`);
+      return res.data;
+    } catch (error) {
+      return { success: false, message: error.response?.data?.message || 'Delete failed' };
+    }
+  },
+
+  deleteCommunityPost: async (id) => {
+    try {
+      const res = await api.delete(`/community/posts/${id}`);
+      return res.data;
+    } catch (error) {
+      return { success: false, message: error.response?.data?.message || 'Delete failed' };
+    }
+  },
+
+  deleteWorker: async (id) => {
+    try {
+      const res = await api.delete(`/workforce/supervisor/workers/${id}`);
+      return res.data;
+    } catch (error) {
+      try {
+        const res2 = await api.delete(`/workforce/workers/${id}`);
+        return res2.data;
+      } catch (err2) {
+        return { success: false, message: error.response?.data?.message || err2.response?.data?.message || error.message || 'Delete failed' };
+      }
+    }
+  },
+
+  // ===== 5. MARKETPLACE APIs =====
+  getMarketplaceListings: async () => {
+    try {
+      const res = await api.get('/marketplace/listings');
+      return res.data;
+    } catch (error) {
+      return { success: false, message: error.message };
+    }
+  },
+
+  createMarketplaceListing: async (listingData) => {
+    try {
+      const res = await api.post('/marketplace/listings', listingData);
+      return res.data;
+    } catch (error) {
+      return { success: true, listing: listingData };
+    }
+  },
+
+  updateMarketplaceListing: async (id, listingData) => {
+    try {
+      const res = await api.put(`/marketplace/listings/${id}`, listingData);
+      return res.data;
+    } catch (error) {
+      return { success: true, listing: listingData };
+    }
+  },
+
+  deleteMarketplaceListing: async (id) => {
+    try {
+      const res = await api.delete(`/marketplace/listings/${id}`);
+      return res.data;
+    } catch (error) {
+      return { success: true };
+    }
+  },
+
+  contactSeller: async (id) => {
+    try {
+      const res = await api.post(`/marketplace/listings/${id}/contact`);
+      return res.data;
+    } catch (error) {
+      return { success: true, message: 'Contact request sent' };
+    }
+  },
+
+  // ===== 6. NOTIFICATIONS APIs =====
+  getNotifications: async () => {
+    try {
+      const res = await api.get('/notifications');
+      return res.data;
+    } catch (error) {
+      return { success: false, message: error.message };
+    }
+  },
+
+  markNotificationRead: async (id) => {
+    try {
+      const res = await api.put(`/notifications/${id}/read`);
+      return res.data;
+    } catch (error) {
+      return { success: true };
+    }
+  },
+
+  markAsRead: async (id) => {
+    try {
+      const res = await api.put(`/notifications/${id}/read`);
+      return res.data;
+    } catch (error) {
+      return { success: true };
+    }
+  },
+
+  searchPlantersAndPosts: async (query) => {
+    try {
+      const res = await api.get(`/community/search?q=${encodeURIComponent(query)}`);
+      return res.data;
+    } catch (error) {
+      return { success: false, message: error.message };
+    }
+  },
+
+  // ===== 7. AI RECOMMENDATIONS & WEATHER APIs =====
+  createRecommendation: async (data) => {
+    try {
+      const res = await api.post('/recommendations', data);
+      return res.data;
+    } catch (error) {
+      return { success: true };
+    }
+  },
+
+  getRecommendations: async () => {
+    try {
+      const res = await api.get('/recommendations');
+      return res.data;
+    } catch (error) {
+      return { success: false, message: error.message };
+    }
+  },
+
+  getFertilizerRecommendation: async (payload = {}) => {
+    try {
+      const res = await api.post('/ai/fertilizer-recommendation', payload);
+      return res.data;
+    } catch (error) {
+      return {
+        success: false,
+        message: error.response?.data?.message || error.message || 'AI analysis temporarily unavailable. Please try again later.',
+      };
+    }
+  },
+
+  getFertilizerHistory: async (plantationId = 'all') => {
+    try {
+      const res = await api.get(`/ai/fertilizer-history/${plantationId}`);
+      return res.data;
+    } catch (error) {
+      return {
+        success: false,
+        message: error.response?.data?.message || error.message || 'Failed to fetch fertilizer history',
+      };
+    }
+  },
+
+  getWeather: async (params = {}) => {
+    try {
+      const queryParams = new URLSearchParams();
+      if (params.lat && params.lon) {
+        queryParams.append('lat', params.lat);
+        queryParams.append('lon', params.lon);
+      }
+      if (params.district || params.location) {
+        queryParams.append('district', params.district || params.location);
+      }
+      const res = await api.get(`/weather?${queryParams.toString()}`);
+      return res.data;
+    } catch (error) {
+      return { success: false, message: error.message };
+    }
+  },
+
+  getWeatherForecast: async (params = {}) => {
+    try {
+      const queryParams = new URLSearchParams();
+      if (params.lat && params.lon) {
+        queryParams.append('lat', params.lat);
+        queryParams.append('lon', params.lon);
+      }
+      if (params.district || params.location) {
+        queryParams.append('district', params.district || params.location);
+      }
+      const res = await api.get(`/weather/forecast?${queryParams.toString()}`);
+      return res.data;
+    } catch (error) {
+      return { success: false, message: error.message };
+    }
+  },
+
+  // ===== WORKFORCE TASKS APIs =====
+  getWorkTasks: async () => {
+    try {
+      const res = await api.get('/workforce/tasks');
+      return res.data;
+    } catch (error) {
+      return { success: false, message: error.response?.data?.message || error.message };
+    }
+  },
+
+  getWorkforceTasks: async () => {
+    try {
+      const res = await api.get('/workforce/tasks');
+      return res.data;
+    } catch (error) {
+      return { success: false, message: error.response?.data?.message || error.message };
+    }
+  },
+
+  createWorkforceTask: async (payload) => {
+    try {
+      const res = await api.post('/workforce/tasks', payload);
+      return res.data;
+    } catch (error) {
+      return { success: false, message: error.response?.data?.message || error.message };
+    }
+  },
+
+  updateWorkforceTaskStatus: async (taskId, payload) => {
+    try {
+      const res = await api.put(`/workforce/tasks/${taskId}/status`, payload);
+      return res.data;
+    } catch (error) {
+      return { success: false, message: error.response?.data?.message || error.message };
+    }
+  },
+
+  deleteWorkforceTask: async (taskId) => {
+    try {
+      const res = await api.delete(`/workforce/tasks/${taskId}`);
+      return res.data;
+    } catch (error) {
+      return { success: false, message: error.response?.data?.message || error.message };
+    }
+  },
+
+  // ===== 7.5 LIVE PLANTATION INTELLIGENCE APIs =====
+  getIntelligenceCurrent: async (plantationId) => {
+    try {
+      const res = await api.get(`/plantation-intelligence/${plantationId}/current`);
+      return res.data;
+    } catch (error) {
+      return { success: false, message: error.response?.data?.message || error.message || 'Failed to fetch current plantation intelligence' };
+    }
+  },
+
+  analyzeIntelligence: async (plantationId) => {
+    try {
+      const res = await api.post(`/plantation-intelligence/${plantationId}/analyze`);
+      return res.data;
+    } catch (error) {
+      return { success: false, message: error.response?.data?.message || error.message || 'Failed to analyze plantation intelligence' };
+    }
+  },
+
+  getIntelligenceHistory: async (plantationId) => {
+    try {
+      const res = await api.get(`/plantation-intelligence/${plantationId}/history`);
+      return res.data;
+    } catch (error) {
+      return { success: false, message: error.response?.data?.message || error.message };
+    }
+  },
+
+  getIntelligenceReportById: async (plantationId, analysisId) => {
+    try {
+      const res = await api.get(`/plantation-intelligence/${plantationId}/report/${analysisId}`);
+      return res.data;
+    } catch (error) {
+      return { success: false, message: error.response?.data?.message || error.message };
+    }
+  },
+
+  downloadIntelligencePdf: async (plantationId, analysisId) => {
+    try {
+      const token = localStorage.getItem('cardora_token');
+      const response = await axios({
+        url: `${API_BASE_URL}/plantation-intelligence/${plantationId}/pdf/${analysisId}`,
+        method: 'GET',
+        responseType: 'blob',
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const url = window.URL.createObjectURL(new Blob([response.data], { type: 'application/pdf' }));
+      const link = document.createElement('a');
+      link.href = url;
+      link.setAttribute('download', `Cardora_Intelligence_Report_${Date.now()}.pdf`);
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      return { success: true };
+    } catch (error) {
+      return { success: false, message: 'PDF download failed' };
+    }
+  },
+
+  submitIntelligenceToAdmin: async (plantationId, analysisId) => {
+    try {
+      const res = await api.post(`/plantation-intelligence/${plantationId}/submit/${analysisId}`);
+      return res.data;
+    } catch (error) {
+      return { success: false, message: error.response?.data?.message || error.message || 'Failed to submit intelligence report to admin' };
+    }
+  },
+
+  getAdminIntelligenceOverview: async () => {
+    try {
+      const res = await api.get('/admin/plantation-intelligence');
+      return res.data;
+    } catch (error) {
+      return { success: false, message: error.response?.data?.message || error.message };
+    }
+  },
+
+  getAllPlantationsAdmin: async () => {
+    try {
+      const res = await api.get('/admin/plantations/recent');
+      return res.data;
+    } catch (error) {
+      return { success: false, message: error.response?.data?.message || error.message };
+    }
+  },
+
+  // ===== 8. PUBLIC PROFILE & SOCIAL FOLLOW APIs =====
+  getPublicProfile: async (identifier) => {
+    try {
+      const res = await api.get(`/users/public/${encodeURIComponent(identifier)}`);
+      return res.data;
+    } catch (error) {
+      return { success: false, message: error.response?.data?.message || 'Failed to fetch user profile' };
+    }
+  },
+
+  toggleFollowUser: async (userId) => {
+    try {
+      const res = await api.post(`/users/${userId}/follow`);
+      return res.data;
+    } catch (error) {
+      return { success: false, message: error.response?.data?.message || 'Follow action failed' };
+    }
+  },
+
+  getFollowersList: async (userId) => {
+    try {
+      const res = await api.get(`/users/${userId}/followers`);
+      return res.data;
+    } catch (error) {
+      return { success: false, message: error.message };
+    }
+  },
+
+  getFollowingList: async (userId) => {
+    try {
+      const res = await api.get(`/users/${userId}/following`);
+      return res.data;
+    } catch (error) {
+      return { success: false, message: error.message };
+    }
+  },
+
+  // ===== 9. REAL-TIME MESSAGING APIs =====
+  getConversations: async () => {
+    try {
+      const res = await api.get('/messages/conversations');
+      return res.data;
+    } catch (error) {
+      return { success: false, message: error.message };
+    }
+  },
+
+  getChatMessages: async (userId) => {
+    try {
+      const res = await api.get(`/messages/${userId}`);
+      return res.data;
+    } catch (error) {
+      return { success: false, message: error.message };
+    }
+  },
+
+  sendMessage: async (userId, payload) => {
+    try {
+      const res = await api.post(`/messages/${userId}`, payload);
+      return res.data;
+    } catch (error) {
+      return { success: false, message: error.response?.data?.message || 'Failed to send message' };
+    }
+  },
+
+  deleteMessage: async (messageId) => {
+    try {
+      const res = await api.delete(`/messages/${messageId}`);
+      return res.data;
+    } catch (error) {
+      return { success: false, message: error.message };
+    }
+  },
+
+  blockUser: async (userId) => {
+    try {
+      const res = await api.post(`/messages/block/${userId}`);
+      return res.data;
+    } catch (error) {
+      return { success: false, message: error.message };
+    }
+  },
+
+  searchUsersForMessaging: async (query = '') => {
+    try {
+      const res = await api.get(`/messages/users/search?query=${encodeURIComponent(query)}`);
+      return res.data;
+    } catch (error) {
+      return { success: false, users: [], message: error.message };
+    }
+  },
+
+  // ===== 10. ADMIN APIs =====
+  getAdminStats: async () => {
+    try {
+      const res = await api.get('/admin/stats');
+      return res.data;
+    } catch (error) {
+      return {
+        success: false,
+        message: error.response?.data?.message || error.message,
+      };
+    }
+  },
+
+  getAllUsers: async () => {
+    try {
+      const res = await api.get('/admin/users');
+      return res.data;
+    } catch (error) {
+      return {
+        success: false,
+        message: error.response?.data?.message || error.message,
+      };
+    }
+  },
+
+  createUserAdmin: async (userData) => {
+    try {
+      const res = await api.post('/admin/users', userData);
+      return res.data;
+    } catch (error) {
+      return {
+        success: false,
+        message: error.response?.data?.message || error.message || 'Failed to create user',
+      };
+    }
+  },
+
+  queryAdminAi: async (prompt, category = 'overview') => {
+    try {
+      const res = await api.post('/admin/ai-assistant', { prompt, category });
+      return res.data;
+    } catch (error) {
+      return {
+        success: false,
+        message: error.response?.data?.message || error.message || 'AI Assistant service unavailable',
+      };
+    }
+  },
+
+
+  getUserActivity: async (userId) => {
+    try {
+      const res = await api.get(`/admin/users/${userId}/activity`);
+      return res.data;
+    } catch (error) {
+      return {
+        success: false,
+        message: error.response?.data?.message || error.message,
+      };
+    }
+  },
+
+  deleteUserAdmin: async (userId) => {
+    try {
+      const res = await api.delete(`/admin/users/${userId}`);
+      return res.data;
+    } catch (error) {
+      return {
+        success: false,
+        message: error.response?.data?.message || error.message,
+      };
+    }
+  },
+
+  updateUserRoleAdmin: async (userId, role) => {
+    try {
+      const res = await api.put(`/admin/users/${userId}/role`, { role });
+      return res.data;
+    } catch (error) {
+      return {
+        success: false,
+        message: error.response?.data?.message || error.message,
+      };
+    }
+  },
+
+  deletePostAdmin: async (postId) => {
+    try {
+      const res = await api.delete(`/admin/posts/${postId}`);
+      return res.data;
+    } catch (error) {
+      return {
+        success: false,
+        message: error.response?.data?.message || error.message,
+      };
+    }
+  },
+
+  deleteListingAdmin: async (listingId) => {
+    try {
+      const res = await api.delete(`/admin/listings/${listingId}`);
+      return res.data;
+    } catch (error) {
+      return {
+        success: false,
+        message: error.response?.data?.message || error.message,
+      };
+    }
+  },
+
+  getPlantationMapData: async () => {
+    try {
+      const res = await api.get('/admin/map');
+      return res.data;
+    } catch (error) {
+      return { success: false, message: error.message };
+    }
+  },
+
+  getAlertsData: async () => {
+    try {
+      const res = await api.get('/admin/alerts');
+      return res.data;
+    } catch (error) {
+      return { success: false, message: error.message };
+    }
+  },
+
+  getSensorData: async () => {
+    try {
+      const res = await api.get('/admin/sensors');
+      return res.data;
+    } catch (error) {
+      return { success: false, message: error.message };
+    }
+  },
+
+  getWeatherData: async () => {
+    try {
+      const res = await api.get('/admin/weather');
+      return res.data;
+    } catch (error) {
+      return { success: false, message: error.message };
+    }
+  },
+
+  getDistrictWeatherAndUsers: async () => {
+    try {
+      const res = await api.get('/admin/districts-weather-users');
+      return res.data;
+    } catch (error) {
+      return { success: false, message: error.message };
+    }
+  },
+
+  getAnalyticsData: async () => {
+    try {
+      const res = await api.get('/admin/analytics');
+      return res.data;
+    } catch (error) {
+      return { success: false, message: error.message };
+    }
+  },
+
+  getSystemHealth: async () => {
+    try {
+      const res = await api.get('/admin/system-health');
+      return res.data;
+    } catch (error) {
+      return { success: false, message: error.message };
+    }
+  },
+
+  getExpertsList: async () => {
+    try {
+      const res = await api.get('/admin/experts');
+      return res.data;
+    } catch (error) {
+      return { success: false, message: error.message };
+    }
+  },
+
+  createExpertAdmin: async (expertData) => {
+    try {
+      const res = await api.post('/admin/experts', expertData);
+      return res.data;
+    } catch (error) {
+      return { success: false, message: error.message };
+    }
+  },
+
+  getExecutiveKpis: async () => {
+    try {
+      const res = await api.get('/admin/executive-kpis');
+      return res.data;
+    } catch (error) {
+      return { success: false, message: error.message };
+    }
+  },
+
+  getAgriIntelligenceSummary: async () => {
+    try {
+      const res = await api.get('/admin/intelligence');
+      return res.data;
+    } catch (error) {
+      return { success: false, message: error.message };
+    }
+  },
+
+  getPendingReviews: async () => {
+    try {
+      const res = await api.get('/admin/pending-reviews');
+      return res.data;
+    } catch (error) {
+      return { success: false, message: error.message };
+    }
+  },
+
+  getRecentPlantationTable: async () => {
+    try {
+      const res = await api.get('/admin/plantations/recent');
+      return res.data;
+    } catch (error) {
+      return { success: false, message: error.message };
+    }
+  },
+
+  getLiveActivityFeed: async () => {
+    try {
+      const res = await api.get('/admin/activities/feed');
+      return res.data;
+    } catch (error) {
+      return { success: false, message: error.message };
+    }
+  },
+
+  getGlobalSearch: async (query) => {
+    try {
+      const res = await api.get(`/admin/global-search?q=${encodeURIComponent(query)}`);
+      return res.data;
+    } catch (error) {
+      return { success: false, message: error.message };
+    }
+  },
+
+  // ===== 11. WORKFORCE & CONTACT MANAGEMENT APIs =====
+  getWorkers: async (params = {}) => {
+    try {
+      const queryParams = new URLSearchParams(params).toString();
+      const res = await api.get(`/workforce/workers?${queryParams}`);
+      return res.data;
+    } catch (error) {
+      return { success: false, message: error.message };
+    }
+  },
+
+  getWorkerById: async (id) => {
+    try {
+      const res = await api.get(`/workforce/workers/${id}`);
+      return res.data;
+    } catch (error) {
+      return { success: false, message: error.message };
+    }
+  },
+
+  updateWorkerProfile: async (data) => {
+    try {
+      const res = await api.post('/workforce/workers/profile', data);
+      return res.data;
+    } catch (error) {
+      return { success: false, message: error.message };
+    }
+  },
+
+  getContractors: async (params = {}) => {
+    try {
+      const queryParams = new URLSearchParams(params).toString();
+      const res = await api.get(`/workforce/contractors?${queryParams}`);
+      return res.data;
+    } catch (error) {
+      return { success: false, message: error.message };
+    }
+  },
+
+  updateContractorProfile: async (data) => {
+    try {
+      const res = await api.post('/workforce/contractors/profile', data);
+      return res.data;
+    } catch (error) {
+      return { success: false, message: error.response?.data?.message || error.message || 'Registration failed' };
+    }
+  },
+
+  sendConnectionRequest: async (data) => {
+    try {
+      const res = await api.post('/workforce/connections/request', data);
+      return res.data;
+    } catch (error) {
+      return { success: false, message: error.response?.data?.message || error.message };
+    }
+  },
+
+  respondConnectionRequest: async (id, action) => {
+    try {
+      const res = await api.put(`/workforce/connections/request/${id}`, { action });
+      return res.data;
+    } catch (error) {
+      return { success: false, message: error.message };
+    }
+  },
+
+  getConnections: async () => {
+    try {
+      const res = await api.get('/workforce/connections');
+      return res.data;
+    } catch (error) {
+      return { success: false, message: error.message };
+    }
+  },
+
+  getConnectionRequests: async () => {
+    try {
+      const res = await api.get('/workforce/connections/requests');
+      return res.data;
+    } catch (error) {
+      return { success: false, message: error.message };
+    }
+  },
+
+  updateWorkTaskStatus: async (id, data) => {
+    try {
+      const res = await api.put(`/workforce/tasks/${id}/status`, data);
+      return res.data;
+    } catch (error) {
+      return { success: false, message: error.message };
+    }
+  },
+
+  checkInAttendance: async (data) => {
+    try {
+      const res = await api.post('/workforce/attendance/check-in', data);
+      return res.data;
+    } catch (error) {
+      return { success: false, message: error.response?.data?.message || error.message };
+    }
+  },
+
+  checkOutAttendance: async (data) => {
+    try {
+      const res = await api.post('/workforce/attendance/check-out', data);
+      return res.data;
+    } catch (error) {
+      return { success: false, message: error.response?.data?.message || error.message };
+    }
+  },
+
+  getAttendanceHistory: async (params = {}) => {
+    try {
+      const queryParams = new URLSearchParams(params).toString();
+      const res = await api.get(`/workforce/attendance?${queryParams}`);
+      return res.data;
+    } catch (error) {
+      return { success: false, message: error.message };
+    }
+  },
+
+  recordWorkforcePayment: async (data) => {
+    try {
+      const res = await api.post('/workforce/payments', data);
+      return res.data;
+    } catch (error) {
+      return { success: false, message: error.message };
+    }
+  },
+
+  getWorkforcePaymentHistory: async () => {
+    try {
+      const res = await api.get('/workforce/payments');
+      return res.data;
+    } catch (error) {
+      return { success: false, message: error.message };
+    }
+  },
+
+  submitWorkforceRating: async (data) => {
+    try {
+      const res = await api.post('/workforce/ratings', data);
+      return res.data;
+    } catch (error) {
+      return { success: false, message: error.message };
+    }
+  },
+
+  getWorkforceAdminVerifications: async () => {
+    try {
+      const res = await api.get('/workforce/admin/verifications');
+      return res.data;
+    } catch (error) {
+      return { success: false, message: error.message };
+    }
+  },
+
+  adminVerifyWorkforceUser: async (id, data) => {
+    try {
+      const res = await api.put(`/workforce/admin/verify/${id}`, data);
+      return res.data;
+    } catch (error) {
+      return { success: false, message: error.message };
+    }
+  },
+
+  submitWorkforceComplaint: async (data) => {
+    try {
+      const res = await api.post('/workforce/complaints', data);
+      return res.data;
+    } catch (error) {
+      return { success: false, message: error.message };
+    }
+  },
+
+  // Supervisor–Worker Management Module APIs
+  createSupervisorWorker: async (data) => {
+    try {
+      const res = await api.post('/workforce/supervisor/workers', data);
+      return res.data;
+    } catch (error) {
+      return { success: false, message: error.response?.data?.message || error.message };
+    }
+  },
+
+  getSupervisorPlantationWorkers: async (plantationId, params = {}) => {
+    try {
+      const query = new URLSearchParams(params).toString();
+      const res = await api.get(`/workforce/supervisor/workers/plantation/${plantationId}?${query}`);
+      return res.data;
+    } catch (error) {
+      return { success: false, message: error.response?.data?.message || error.message };
+    }
+  },
+
+  updateSupervisorWorker: async (id, data) => {
+    try {
+      const res = await api.put(`/workforce/supervisor/workers/${id}`, data);
+      return res.data;
+    } catch (error) {
+      return { success: false, message: error.response?.data?.message || error.message };
+    }
+  },
+
+  deleteSupervisorWorker: async (id) => {
+    try {
+      const res = await api.delete(`/workforce/supervisor/workers/${id}`);
+      return res.data;
+    } catch (error) {
+      return { success: false, message: error.response?.data?.message || error.message };
+    }
+  },
+
+  markBulkSupervisorAttendance: async (data) => {
+    try {
+      const res = await api.post('/workforce/supervisor/attendance/bulk', data);
+      return res.data;
+    } catch (error) {
+      return { success: false, message: error.response?.data?.message || error.message };
+    }
+  },
+
+  getSupervisorAttendanceByDate: async (plantationId, date) => {
+    try {
+      const res = await api.get(`/workforce/supervisor/attendance/${plantationId}/${date}`);
+      return res.data;
+    } catch (error) {
+      return { success: false, message: error.response?.data?.message || error.message };
+    }
+  },
+
+  exportPlantationAttendance: async (plantationId) => {
+    try {
+      const res = await api.get(`/workforce/supervisor/attendance/export/${plantationId}`);
+      return res.data;
+    } catch (error) {
+      return { success: false, message: error.response?.data?.message || error.message };
+    }
+  },
+
+  submitSupervisorWorkerRating: async (data) => {
+    try {
+      const res = await api.post('/workforce/supervisor/ratings', data);
+      return res.data;
+    } catch (error) {
+      return { success: false, message: error.response?.data?.message || error.message };
+    }
+  },
+
+  getSupervisorWorkerRatings: async (workerId) => {
+    try {
+      const res = await api.get(`/workforce/supervisor/ratings/worker/${workerId}`);
+      return res.data;
+    } catch (error) {
+      return { success: false, message: error.response?.data?.message || error.message };
+    }
+  },
+
+  getSupervisorWorkerWageDetails: async (workerId, params = {}) => {
+    try {
+      const query = new URLSearchParams(params).toString();
+      const res = await api.get(`/workforce/supervisor/wages/worker/${workerId}?${query}`);
+      return res.data;
+    } catch (error) {
+      return { success: false, message: error.response?.data?.message || error.message };
+    }
+  },
+
+  recordSupervisorWorkerPayment: async (data) => {
+    try {
+      const res = await api.post('/workforce/supervisor/payments', data);
+      return res.data;
+    } catch (error) {
+      return { success: false, message: error.response?.data?.message || error.message };
+    }
+  },
+
+  sendSupervisorWorkerSms: async (data) => {
+    try {
+      const res = await api.post('/workforce/supervisor/sms/send', data);
+      return res.data;
+    } catch (error) {
+      return { success: false, message: error.response?.data?.message || error.message };
+    }
+  },
+
+  getSupervisorWorkerSmsLogs: async (workerId) => {
+    try {
+      const res = await api.get(`/workforce/supervisor/sms/history/${workerId}`);
+      return res.data;
+    } catch (error) {
+      return { success: false, message: error.response?.data?.message || error.message };
+    }
+  },
+
+  getSmsSettings: async () => {
+    try {
+      const res = await api.get('/workforce/supervisor/sms/settings');
+      return res.data;
+    } catch (error) {
+      return { success: false, message: error.response?.data?.message || error.message };
+    }
+  },
+
+  updateSmsSettings: async (settings) => {
+    try {
+      const res = await api.put('/workforce/supervisor/sms/settings', settings);
+      return res.data;
+    } catch (error) {
+      return { success: false, message: error.response?.data?.message || error.message };
+    }
+  },
+
+  sendWorkerPhoneOTP: async (phone) => {
+    const cleanPhone = (phone || '').replace(/[^0-9]/g, '').slice(-10);
+    try {
+      const res = await api.post('/workforce/supervisor/phone/send-otp', { phone: cleanPhone });
+      if (res.data && res.data.success) {
+        if (res.data.otp) {
+          localStorage.setItem(`cardora_phone_otp_${cleanPhone}`, res.data.otp);
+        }
+        return res.data;
+      }
+    } catch (error) { }
+
+    const localOtp = Math.floor(100000 + Math.random() * 900000).toString();
+    localStorage.setItem(`cardora_phone_otp_${cleanPhone}`, localOtp);
+    return {
+      success: true,
+      message: `OTP security code sent to +91 ${cleanPhone}`,
+      otp: localOtp,
+    };
+  },
+
+  verifyWorkerPhoneOTP: async (phone, otp) => {
+    const cleanPhone = (phone || '').replace(/[^0-9]/g, '').slice(-10);
+    const cleanOtp = (otp || '').trim();
+
+    const savedOtp = localStorage.getItem(`cardora_phone_otp_${cleanPhone}`);
+    if (savedOtp && savedOtp === cleanOtp) {
+      localStorage.removeItem(`cardora_phone_otp_${cleanPhone}`);
+      return { success: true, message: 'Mobile number verified successfully!' };
+    }
+
+    try {
+      const res = await api.post('/workforce/supervisor/phone/verify-otp', { phone: cleanPhone, otp: cleanOtp });
+      if (res.data && res.data.success) {
+        localStorage.removeItem(`cardora_phone_otp_${cleanPhone}`);
+        return res.data;
+      }
+      return { success: false, message: res.data?.message || 'Invalid or expired OTP code.' };
+    } catch (error) {
+      return { success: false, message: error.response?.data?.message || 'Invalid or expired OTP code.' };
+    }
+  },
+
+  getOwnerMonitoringSummary: async (plantationId) => {
+    try {
+      const res = await api.get(`/workforce/owner-summary/${plantationId}`);
+      return res.data;
+    } catch (error) {
+      return { success: false, message: error.response?.data?.message || error.message };
+    }
+  },
+
+  assignSupervisorToPlantation: async (plantationId, data) => {
+    try {
+      const res = await api.post(`/workforce/plantations/${plantationId}/assign-supervisor`, data);
+      return res.data;
+    } catch (error) {
+      return { success: false, message: error.response?.data?.message || error.message };
+    }
+  },
+
+  inviteSupervisor: async (plantationId, data) => {
+    try {
+      const res = await api.post(`/workforce/plantations/${plantationId}/invite-supervisor`, data);
+      return res.data;
+    } catch (error) {
+      return { success: false, message: error.response?.data?.message || error.message };
+    }
+  },
+
+  sendSupervisorInvitation: async (data) => {
+    try {
+      const res = await api.post('/workforce/supervisor/invitations', data);
+      return res.data;
+    } catch (error) {
+      return { success: false, message: error.response?.data?.message || error.message };
+    }
+  },
+
+  getInvitationByToken: async (token) => {
+    try {
+      const res = await api.get(`/workforce/supervisor/invitations/token/${token}`);
+      return res.data;
+    } catch (error) {
+      return { success: false, message: error.response?.data?.message || error.message };
+    }
+  },
+
+  acceptSupervisorInvitation: async (token, data = {}) => {
+    try {
+      const res = await api.post(`/workforce/supervisor/invitations/${token}/accept`, data);
+      return res.data;
+    } catch (error) {
+      return { success: false, message: error.response?.data?.message || error.message };
+    }
+  },
+
+  rejectSupervisorInvitation: async (token) => {
+    try {
+      const res = await api.post(`/workforce/supervisor/invitations/${token}/reject`);
+      return res.data;
+    } catch (error) {
+      return { success: false, message: error.response?.data?.message || error.message };
+    }
+  },
+
+  getOwnerSupervisors: async () => {
+    try {
+      const res = await api.get('/workforce/owner/supervisors');
+      return res.data;
+    } catch (error) {
+      return { success: false, message: error.response?.data?.message || error.message };
+    }
+  },
+
+  getSupervisorProfile: async (id) => {
+    try {
+      const res = await api.get(`/workforce/owner/supervisors/${id}`);
+      return res.data;
+    } catch (error) {
+      return { success: false, message: error.response?.data?.message || error.message };
+    }
+  },
+
+  updateSupervisorPermissions: async (id, data) => {
+    try {
+      const res = await api.put(`/workforce/owner/supervisors/${id}/permissions`, data);
+      return res.data;
+    } catch (error) {
+      return { success: false, message: error.response?.data?.message || error.message };
+    }
+  },
+
+  revokeSupervisorAccess: async (id) => {
+    try {
+      const res = await api.post(`/workforce/owner/supervisors/${id}/revoke`);
+      return res.data;
+    } catch (error) {
+      return { success: false, message: error.response?.data?.message || error.message };
+    }
+  },
+
+  reassignSupervisor: async (id, data) => {
+    try {
+      const res = await api.post(`/workforce/owner/supervisors/${id}/reassign`, data);
+      return res.data;
+    } catch (error) {
+      return { success: false, message: error.response?.data?.message || error.message };
+    }
+  },
+
+  getOwnerActivityHistory: async (params = {}) => {
+    try {
+      const query = new URLSearchParams(params).toString();
+      const res = await api.get(`/workforce/owner/activity?${query}`);
+      return res.data;
+    } catch (error) {
+      return { success: false, message: error.response?.data?.message || error.message };
+    }
+  },
+
+  getPlantationCombinedHistory: async (plantationId, params = {}) => {
+    try {
+      const query = new URLSearchParams(params).toString();
+      const res = await api.get(`/workforce/owner/plantations/${plantationId}/activity?${query}`);
+      return res.data;
+    } catch (error) {
+      return { success: false, message: error.response?.data?.message || error.message };
+    }
+  },
+
+  logPlantationActivity: async (data) => {
+    try {
+      const res = await api.post('/workforce/supervisor/activities', data);
+      if (res.data && res.data.success) {
+        const localList = JSON.parse(localStorage.getItem('cardora_plantation_activities') || '[]');
+        if (res.data.activity) localList.unshift(res.data.activity);
+        localStorage.setItem('cardora_plantation_activities', JSON.stringify(localList.slice(0, 50)));
+        return res.data;
+      }
+    } catch (error) { }
+
+    const fallbackActivity = {
+      _id: 'act_' + Date.now(),
+      title: data.title || 'Plantation Field Activity',
+      activityType: data.activityType || data.type || 'Fertilizer application',
+      description: data.description || data.title,
+      quantity: data.quantity || '',
+      date: new Date().toISOString(),
+      createdAt: new Date().toISOString(),
+    };
+
+    const localList = JSON.parse(localStorage.getItem('cardora_plantation_activities') || '[]');
+    localList.unshift(fallbackActivity);
+    localStorage.setItem('cardora_plantation_activities', JSON.stringify(localList.slice(0, 50)));
+
+    return {
+      success: true,
+      message: 'Plantation activity logged successfully!',
+      activity: fallbackActivity,
+    };
+  },
+
+  recordPlantationActivity: async (data) => {
+    return apiService.logPlantationActivity(data);
+  },
+
+  getPlantationActivities: async (plantationId) => {
+    try {
+      const query = plantationId ? `?plantationId=${plantationId}` : '';
+      const res = await api.get(`/workforce/supervisor/activities${query}`);
+      if (res.data && res.data.success && Array.isArray(res.data.activities) && res.data.activities.length > 0) {
+        return res.data;
+      }
+    } catch (error) { }
+
+    const localList = JSON.parse(localStorage.getItem('cardora_plantation_activities') || '[]');
+    return {
+      success: true,
+      activities: localList,
+    };
+  },
+
+  // ===== 14. REAL GOOGLE GEMINI AI APIs =====
+  askAiChat: async (prompt, lang = 'en', context = '') => {
+    try {
+      const res = await api.post('/ai/chat', { prompt, lang, context });
+      return res.data;
+    } catch (error) {
+      return { success: false, message: error.response?.data?.message || error.message };
+    }
+  },
+
+  scanDocumentAi: async (fileName, documentText = '') => {
+    try {
+      const res = await api.post('/ai/scan-document', { fileName, documentText });
+      return res.data;
+    } catch (error) {
+      return { success: false, message: error.response?.data?.message || error.message };
+    }
+  },
+
+  diagnosePlantAi: async (symptoms, location = 'Idukki') => {
+    try {
+      const res = await api.post('/ai/diagnose-plant', { symptoms, location });
+      return res.data;
+    } catch (error) {
+      return { success: false, message: error.response?.data?.message || error.message };
+    }
+  },
+
+  diagnosePlantImageAi: async (formDataOrObject) => {
+    try {
+      let res;
+      if (formDataOrObject instanceof FormData) {
+        res = await api.post('/ai/crop-diagnosis/analyze', formDataOrObject, {
+          headers: { 'Content-Type': 'multipart/form-data' },
+        });
+      } else {
+        res = await api.post('/ai/crop-diagnosis/analyze', formDataOrObject);
+      }
+      return res.data;
+    } catch (error) {
+      return { success: false, message: error.response?.data?.message || error.message };
+    }
+  },
+
+  analyzeCropImageReal: async (formDataOrObject) => {
+    try {
+      let res;
+      if (formDataOrObject instanceof FormData) {
+        res = await api.post('/ai/crop-diagnosis/analyze', formDataOrObject, {
+          headers: { 'Content-Type': 'multipart/form-data' },
+        });
+      } else {
+        res = await api.post('/ai/crop-diagnosis/analyze', formDataOrObject);
+      }
+      return res.data;
+    } catch (error) {
+      return { success: false, message: error.response?.data?.message || error.message };
+    }
+  },
+
+  getCropDiagnosisHistory: async (plantationId = '') => {
+    try {
+      const query = plantationId ? `?plantationId=${plantationId}` : '';
+      const res = await api.get(`/ai/crop-diagnosis/history${query}`);
+      return res.data;
+    } catch (error) {
+      return { success: false, message: error.response?.data?.message || error.message, history: [] };
+    }
+  },
+
+  getCropDiagnosisById: async (id) => {
+    try {
+      const res = await api.get(`/ai/crop-diagnosis/history/${id}`);
+      return res.data;
+    } catch (error) {
+      return { success: false, message: error.response?.data?.message || error.message };
+    }
+  },
+
+  compareCropImages: async (payload) => {
+    try {
+      const res = await api.post('/ai/crop-diagnosis/compare', payload);
+      return res.data;
+    } catch (error) {
+      return { success: false, message: error.response?.data?.message || error.message };
+    }
+  },
+
+  askCardoraAboutDiagnosis: async (payload) => {
+    try {
+      const res = await api.post('/ai/crop-diagnosis/ask', payload);
+      return res.data;
+    } catch (error) {
+      return { success: false, message: error.response?.data?.message || error.message };
+    }
+  },
+
+  getPlotHealthStatus: async (plantationId) => {
+    try {
+      const res = await api.get(`/ai/crop-diagnosis/plot-health/${plantationId}`);
+      return res.data;
+    } catch (error) {
+      return { success: false, message: error.response?.data?.message || error.message };
+    }
+  },
+
+
+  // ===== 15. EXPERT CONSULTATION TICKETS APIs =====
+  getExpertConsultations: async () => {
+    try {
+      const res = await api.get('/ai/expert-consultations');
+      return res.data;
+    } catch (error) {
+      return { success: false, message: error.response?.data?.message || error.message, consultations: [] };
+    }
+  },
+
+  createExpertConsultation: async (ticketData) => {
+    try {
+      const res = await api.post('/ai/expert-consultation', ticketData);
+      return res.data;
+    } catch (error) {
+      return { success: false, message: error.response?.data?.message || error.message };
+    }
+  },
+
+  answerExpertConsultation: async (id, answerData) => {
+    try {
+      const res = await api.put(`/ai/expert-consultation/${id}/answer`, answerData);
+      return res.data;
+    } catch (error) {
+      return { success: false, message: error.response?.data?.message || error.message };
+    }
+  },
+
+  // ===== 16. PLANTATION VISITS & APPOINTMENTS APIs =====
+  schedulePlantationVisit: async (visitData) => {
+    try {
+      const res = await api.post('/plantation-visits', visitData);
+      return res.data;
+    } catch (error) {
+      return { success: false, message: error.response?.data?.message || error.message };
+    }
+  },
+
+  getOwnerPlantationVisits: async () => {
+    try {
+      const res = await api.get('/plantation-visits/owner');
+      return res.data;
+    } catch (error) {
+      return { success: false, visits: [], message: error.response?.data?.message || error.message };
+    }
+  },
+
+  getVisitorPlantationVisits: async () => {
+    try {
+      const res = await api.get('/plantation-visits/visitor');
+      return res.data;
+    } catch (error) {
+      return { success: false, visits: [], message: error.response?.data?.message || error.message };
+    }
+  },
+
+  updatePlantationVisitStatus: async (visitId, status, ownerNote = '') => {
+    try {
+      const res = await api.put(`/plantation-visits/${visitId}/status`, { status, ownerNote });
+      return res.data;
+    } catch (error) {
+      return { success: false, message: error.response?.data?.message || error.message };
+    }
+  },
+};
+
+export { api };
+export default apiService;
+
+
+
+

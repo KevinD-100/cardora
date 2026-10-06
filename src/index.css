@@ -1,0 +1,708 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@import 'leaflet/dist/leaflet.css';
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=Poppins:wght@300;400;500;600;700;800;900&family=Space+Grotesk:wght@300;400;500;600;700&display=swap');
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  font-family: 'Inter', sans-serif;
+  background-color: #F2F7F4;
+  color: #1F2937;
+  overflow-x: hidden;
+}
+
+.dark body {
+  background-color: #06150D;
+  color: #E5E7EB;
+}
+
+h1,
+h2,
+h3,
+h4,
+h5,
+h6 {
+  font-family: 'Poppins', 'Space Grotesk', sans-serif;
+  color: #06150D;
+}
+
+.dark h1,
+.dark h2,
+.dark h3,
+.dark h4,
+.dark h5,
+.dark h6 {
+  color: #F9FAFB;
+}
+
+::-webkit-scrollbar {
+  width: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: #F2F7F4;
+}
+
+.dark ::-webkit-scrollbar-track {
+  background: #06150D;
+}
+
+::-webkit-scrollbar-thumb {
+  background: linear-gradient(180deg, #059669, #D4AF37);
+  border-radius: 9999px;
+}
+
+/* Glassmorphism Navbar & Cards */
+.glass-nav {
+  background: rgba(255, 255, 255, 0.75);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border-bottom: 1px solid rgba(215, 230, 213, 0.7);
+}
+
+.glass-nav-scrolled {
+  background: rgba(248, 250, 247, 0.92);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border-bottom: 1px solid #D7E6D5;
+  box-shadow: 0 10px 30px -5px rgba(31, 94, 59, 0.08);
+}
+
+.glass-card {
+  background: rgba(255, 255, 255, 0.88);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid #D7E6D5;
+  border-radius: 20px;
+}
+
+/* Custom Pill Button Ripple Click */
+.ripple-button {
+  position: relative;
+  overflow: hidden;
+}
+
+.ripple-button::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 0;
+  height: 0;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.35);
+  transform: translate(-50%, -50%);
+  transition: width 0.5s ease-out, height 0.5s ease-out;
+}
+
+.ripple-button:active::after {
+  width: 300px;
+  height: 300px;
+}
+
+/* Animated Underline for Links */
+.animated-underline {
+  position: relative;
+}
+
+.animated-underline::after {
+  content: '';
+  position: absolute;
+  bottom: -4px;
+  left: 0;
+  width: 0%;
+  height: 2px;
+  background: linear-gradient(90deg, #1F5E3B, #C9A227);
+  transition: width 0.3s ease-in-out;
+  border-radius: 2px;
+}
+
+.animated-underline:hover::after {
+  width: 100%;
+}
+
+/* Continuous Nature Animation Keyframes (No Opacity Fades!) */
+@keyframes floatLeaf {
+
+  0%,
+  100% {
+    transform: translateY(0px) rotate(0deg) scale(1);
+  }
+
+  50% {
+    transform: translateY(-18px) rotate(12deg) scale(1.05);
+  }
+}
+
+@keyframes swayGrass {
+
+  0%,
+  100% {
+    transform: rotate(-3deg);
+  }
+
+  50% {
+    transform: rotate(4deg);
+  }
+}
+
+@keyframes flyButterfly {
+  0% {
+    transform: translate(0px, 0px) scale(0.9) rotate(-5deg);
+  }
+
+  25% {
+    transform: translate(40px, -25px) scale(1.05) rotate(5deg);
+  }
+
+  50% {
+    transform: translate(80px, 10px) scale(1) rotate(-3deg);
+  }
+
+  75% {
+    transform: translate(40px, 30px) scale(0.95) rotate(8deg);
+  }
+
+  100% {
+    transform: translate(0px, 0px) scale(0.9) rotate(-5deg);
+  }
+}
+
+@keyframes sunRayPass {
+  0% {
+    transform: translateX(-100%) skewX(-20deg);
+  }
+
+  50% {
+    transform: translateX(100%) skewX(-20deg);
+  }
+
+  100% {
+    transform: translateX(200%) skewX(-20deg);
+  }
+}
+
+@keyframes pollenDrift {
+  0% {
+    transform: translateY(0) translateX(0) scale(0.8);
+  }
+
+  50% {
+    transform: translateY(-40px) translateX(20px) scale(1.2);
+  }
+
+  100% {
+    transform: translateY(-80px) translateX(-10px) scale(0.8);
+  }
+}
+
+.animate-float-leaf {
+  animation: floatLeaf 5s ease-in-out infinite;
+}
+
+.animate-sway-grass {
+  transform-origin: bottom center;
+  animation: swayGrass 4s ease-in-out infinite;
+}
+
+.animate-butterfly {
+  animation: flyButterfly 10s linear infinite;
+}
+
+.animate-pollen {
+  animation: pollenDrift 7s ease-in-out infinite;
+}
+
+/* Section Dividers */
+.curved-divider {
+  position: relative;
+  width: 100%;
+  overflow: hidden;
+  line-height: 0;
+}
+
+.curved-divider svg {
+  position: relative;
+  display: block;
+  width: calc(100% + 1.3px);
+  height: 50px;
+}
+
+/* Hover Tilt Effect Utility */
+.tilt-card {
+  transition: transform 0.3s cubic-bezier(0.25, 1, 0.5, 1), box-shadow 0.3s ease;
+}
+
+.tilt-card:hover {
+  transform: translateY(-8px) scale(1.01);
+  box-shadow: 0 20px 40px -10px rgba(31, 94, 59, 0.12);
+}
+
+/* ==========================================================================
+   GLOBAL FORM CONTROLS & FULL-PAGE SPACIOUS INPUT FIELD SYSTEM
+   Ensures ALL input, select, and textarea fields across the entire application
+   are spacious, full-width, highly legible, and comfortable on mobile & desktop.
+   ========================================================================== */
+
+input[type="text"],
+input[type="email"],
+input[type="password"],
+input[type="number"],
+input[type="tel"],
+input[type="search"],
+input[type="date"],
+input[type="time"],
+input[type="datetime-local"],
+input[type="url"],
+select,
+textarea {
+  font-size: 0.9375rem !important;
+  /* 15px */
+  line-height: 1.5 !important;
+  padding-top: 0.75rem !important;
+  /* 12px */
+  padding-bottom: 0.75rem !important;
+  /* 12px */
+  padding-left: 1rem !important;
+  /* 16px */
+  padding-right: 1rem !important;
+  /* 16px */
+  min-height: 48px !important;
+  border-radius: 1rem !important;
+  /* 16px rounded-2xl */
+  font-weight: 500 !important;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1) !important;
+}
+
+/* Ensure search inputs with icons maintain left padding clearance */
+input[class*="pl-8"],
+input.pl-8 {
+  padding-left: 2.25rem !important;
+}
+
+input[class*="pl-9"],
+input.pl-9 {
+  padding-left: 2.6rem !important;
+}
+
+input[class*="pl-10"],
+input.pl-10 {
+  padding-left: 2.85rem !important;
+}
+
+input[class*="pl-11"],
+input.pl-11 {
+  padding-left: 3.1rem !important;
+}
+
+input[class*="pl-12"],
+input.pl-12 {
+  padding-left: 3.35rem !important;
+}
+
+/* Focus states for ultimate legibility & aesthetics */
+input[type="text"]:focus,
+input[type="email"]:focus,
+input[type="password"]:focus,
+input[type="number"]:focus,
+input[type="tel"]:focus,
+input[type="search"]:focus,
+input[type="date"]:focus,
+input[type="time"]:focus,
+input[type="datetime-local"]:focus,
+input[type="url"]:focus,
+select:focus,
+textarea:focus {
+  outline: none !important;
+  border-color: #1F5E3B !important;
+  box-shadow: 0 0 0 3px rgba(31, 94, 59, 0.2), 0 4px 12px rgba(31, 94, 59, 0.08) !important;
+}
+
+/* Generous textarea height */
+textarea {
+  min-height: 110px !important;
+  padding-top: 0.875rem !important;
+}
+
+/* Custom placeholder legibility */
+::placeholder {
+  font-size: 0.875rem !important;
+  opacity: 0.7 !important;
+}
+
+/* ==========================================================================
+   LEAFLET REAL GPS MAP STYLING & CUSTOM MARKERS
+   ========================================================================== */
+.leaflet-container {
+  width: 100%;
+  height: 100%;
+  background-color: #090d16 !important;
+  font-family: 'Poppins', 'Inter', sans-serif !important;
+  z-index: 1;
+}
+
+.leaflet-control-zoom {
+  border: none !important;
+  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.4) !important;
+  border-radius: 14px !important;
+  overflow: hidden;
+  margin-top: 16px !important;
+  margin-right: 16px !important;
+}
+
+.leaflet-control-zoom a {
+  background-color: rgba(15, 23, 42, 0.9) !important;
+  color: #66BB6A !important;
+  backdrop-filter: blur(12px);
+  border: 1px solid rgba(255, 255, 255, 0.15) !important;
+  width: 34px !important;
+  height: 34px !important;
+  line-height: 34px !important;
+  font-size: 16px !important;
+  font-weight: bold !important;
+}
+
+.leaflet-control-zoom a:hover {
+  background-color: #1B5E20 !important;
+  color: #ffffff !important;
+}
+
+.custom-leaflet-div-icon {
+  background: transparent;
+  border: none;
+}
+
+.custom-leaflet-popup .leaflet-popup-content-wrapper {
+  background: rgba(15, 23, 42, 0.95);
+  backdrop-filter: blur(16px);
+  color: #fff;
+  border-radius: 16px;
+  border: 1px solid rgba(102, 187, 106, 0.4);
+  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.5);
+  padding: 4px;
+}
+
+.custom-leaflet-popup .leaflet-popup-tip {
+  background: rgba(15, 23, 42, 0.95);
+  border: 1px solid rgba(102, 187, 106, 0.4);
+}
+
+/* ==========================================================================
+   ANIMATION KEYFRAMES: BIRDS, TREES, CARDAMOM PODS & ESTATE BUILDINGS
+   ========================================================================== */
+
+@keyframes flyAcrossSky {
+  0% {
+    transform: translateX(-10vw) translateY(0px) scale(0.9);
+    opacity: 0;
+  }
+
+  10% {
+    opacity: 0.8;
+  }
+
+  50% {
+    transform: translateX(50vw) translateY(-15px) scale(1.05);
+    opacity: 0.9;
+  }
+
+  90% {
+    opacity: 0.8;
+  }
+
+  100% {
+    transform: translateX(110vw) translateY(-5px) scale(0.95);
+    opacity: 0;
+  }
+}
+
+@keyframes wingFlap {
+
+  0%,
+  100% {
+    transform: rotate(0deg) scaleY(1);
+  }
+
+  50% {
+    transform: rotate(-12deg) scaleY(0.7);
+  }
+}
+
+@keyframes swayTree {
+
+  0%,
+  100% {
+    transform: rotate(0deg);
+  }
+
+  50% {
+    transform: rotate(2.5deg);
+  }
+}
+
+@keyframes floatCardamomPod {
+  0% {
+    transform: translateY(0px) rotate(0deg);
+    opacity: 0.3;
+  }
+
+  50% {
+    transform: translateY(-25px) rotate(8deg);
+    opacity: 0.8;
+  }
+
+  100% {
+    transform: translateY(-50px) rotate(-8deg);
+    opacity: 0;
+  }
+}
+
+@keyframes riseBarnSmoke {
+  0% {
+    transform: translateY(0px) scale(0.6);
+    opacity: 0.5;
+  }
+
+  50% {
+    transform: translateY(-20px) scale(1.1);
+    opacity: 0.3;
+  }
+
+  100% {
+    transform: translateY(-45px) scale(1.8);
+    opacity: 0;
+  }
+}
+
+.animate-fly-bird {
+  animation: flyAcrossSky 28s linear infinite;
+}
+
+.animate-wing-flap {
+  animation: wingFlap 1.2s ease-in-out infinite;
+}
+
+.animate-sway-tree {
+  transform-origin: bottom center;
+  animation: swayTree 6s ease-in-out infinite;
+}
+
+.animate-float-cardamom {
+  animation: floatCardamomPod 7s ease-in-out infinite;
+}
+
+.animate-rise-smoke {
+  animation: riseBarnSmoke 4.5s ease-out infinite;
+}
+
+/* ==========================================================================
+   CARDORA KERALA CARDAMOM PLANTATION ATMOSPHERIC BACKGROUND SYSTEM
+   ========================================================================== */
+
+.cardora-plantation-backdrop {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 0;
+  overflow: hidden;
+}
+
+/* Layer 1: Rich Multi-stop Natural Emerald Gradient Mesh */
+.cardora-bg-mesh {
+  position: absolute;
+  inset: 0;
+  background: 
+    radial-gradient(circle at 15% 15%, rgba(16, 185, 129, 0.18) 0%, transparent 55%),
+    radial-gradient(circle at 85% 20%, rgba(245, 158, 11, 0.14) 0%, transparent 50%),
+    radial-gradient(circle at 50% 75%, rgba(5, 150, 105, 0.16) 0%, transparent 60%),
+    linear-gradient(135deg, #041F14 0%, #06281B 35%, #0A3624 70%, #052216 100%);
+  transition: background 0.5s ease;
+}
+
+.dark .cardora-bg-mesh {
+  background: 
+    radial-gradient(circle at 15% 15%, rgba(16, 185, 129, 0.25) 0%, transparent 55%),
+    radial-gradient(circle at 85% 20%, rgba(245, 158, 11, 0.18) 0%, transparent 50%),
+    radial-gradient(circle at 50% 75%, rgba(5, 150, 105, 0.22) 0%, transparent 60%),
+    linear-gradient(135deg, #02120B 0%, #052417 40%, #093623 75%, #04190F 100%);
+}
+
+/* Layer 2: Photorealistic Western Ghats Cardamom Hill Plantation Landscape Image */
+.cardora-bg-photo {
+  position: absolute;
+  inset: 0;
+  background-image: url('../public/images/weather_hero_bg.jpg');
+  background-size: cover;
+  background-position: center;
+  opacity: 0.22;
+  filter: contrast(1.15) saturate(1.1);
+  mix-blend-mode: soft-light;
+  transform: scale(1.02);
+}
+
+.dark .cardora-bg-photo {
+  opacity: 0.32;
+  filter: contrast(1.2) saturate(1.15);
+  mix-blend-mode: soft-light;
+}
+
+/* Layer 3: Ultra-subtle Micro Botanical Line Pattern Watermark (No Loud Circles) */
+.cardora-bg-leaf-pattern {
+  position: absolute;
+  inset: 0;
+  background-image: url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='%2310B981' fill-opacity='0.035' stroke='%2334D399' stroke-opacity='0.04' stroke-width='0.5'%3E%3Cpath d='M30 5C22 18 8 26 8 38c0 8 6 13 13 13 8 0 13-5 13-13 0-12-15-20-4-33zm0 0c8 13 22 21 22 33 0 8-6 13-13 13-7 0-13-5-13-13 0-12 15-20 4-33z'/%3E%3C/g%3E%3C/svg%3E");
+  opacity: 0.5;
+}
+
+.dark .cardora-bg-leaf-pattern {
+  background-image: url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='%2334D399' fill-opacity='0.04' stroke='%2310B981' stroke-opacity='0.05' stroke-width='0.5'%3E%3Cpath d='M30 5C22 18 8 26 8 38c0 8 6 13 13 13 8 0 13-5 13-13 0-12-15-20-4-33zm0 0c8 13 22 21 22 33 0 8-6 13-13 13-7 0-13-5-13-13 0-12 15-20 4-33z'/%3E%3C/g%3E%3C/svg%3E");
+  opacity: 0.45;
+}
+
+/* Layer 4: Deep Natural Vignette Overlay */
+.cardora-bg-vignette {
+  position: absolute;
+  inset: 0;
+  background: 
+    linear-gradient(180deg, rgba(2, 18, 11, 0.35) 0%, transparent 25%, transparent 75%, rgba(2, 18, 11, 0.50) 100%),
+    radial-gradient(circle at 50% 50%, transparent 45%, rgba(2, 18, 11, 0.35) 100%);
+}
+
+.dark .cardora-bg-vignette {
+  background: 
+    linear-gradient(180deg, rgba(2, 18, 11, 0.45) 0%, transparent 25%, transparent 75%, rgba(2, 18, 11, 0.60) 100%),
+    radial-gradient(circle at 50% 50%, transparent 40%, rgba(2, 18, 11, 0.50) 100%);
+}
+
+/* Translucent Surface Card Enhancement */
+.cardora-glass-surface {
+  background-color: rgba(255, 255, 255, 0.94);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid #CDE3D5;
+  box-shadow: 0 10px 30px -5px rgba(31, 94, 59, 0.06);
+}
+
+.dark .cardora-glass-surface {
+  background-color: rgba(7, 36, 24, 0.90);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(52, 211, 153, 0.22);
+  box-shadow: 0 12px 36px rgba(0, 0, 0, 0.35);
+}
+
+/* ========================================================================= */
+/* ENTERPRISE AGRICULTURAL ADMIN DASHBOARD DESIGN SYSTEM STYLES */
+/* ========================================================================= */
+
+.admin-dashboard-bg {
+  background-color: #F7F9F8;
+  background-image: 
+    linear-gradient(180deg, rgba(247, 249, 248, 0.92) 0%, rgba(247, 249, 248, 0.96) 100%),
+    url('../public/images/cardamom_dashboard_bg.jpg');
+  background-size: cover;
+  background-position: center;
+  background-attachment: fixed;
+}
+
+.dark .admin-dashboard-bg {
+  background-color: #0B120E;
+  background-image: 
+    linear-gradient(180deg, rgba(11, 18, 14, 0.93) 0%, rgba(11, 18, 14, 0.97) 100%),
+    url('../public/images/cardamom_dashboard_bg.jpg');
+  background-size: cover;
+  background-position: center;
+  background-attachment: fixed;
+}
+
+/* Cardamom Header Hero Container Style with Translucent Backdrop */
+.admin-header-cardamom-bg {
+  position: relative;
+  background-image: 
+    linear-gradient(135deg, rgba(255, 255, 255, 0.93) 0%, rgba(247, 249, 248, 0.88) 100%),
+    url('../public/images/cardamom_dashboard_bg.jpg');
+  background-size: cover;
+  background-position: center right;
+  backdrop-filter: blur(8px);
+}
+
+.dark .admin-header-cardamom-bg {
+  background-image: 
+    linear-gradient(135deg, rgba(18, 28, 22, 0.94) 0%, rgba(15, 23, 42, 0.90) 100%),
+    url('../public/images/cardamom_dashboard_bg.jpg');
+  background-size: cover;
+  background-position: center right;
+}
+
+/* Modern Enterprise White Card Style */
+.admin-card {
+  background-color: #FFFFFF;
+  border: 1px solid #E2E8E5;
+  border-radius: 12px;
+  box-shadow: 0 1px 3px rgba(16, 24, 40, 0.04), 0 1px 2px rgba(16, 24, 40, 0.02);
+  transition: transform 0.2s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.2s cubic-bezier(0.16, 1, 0.3, 1), border-color 0.2s ease;
+}
+
+.admin-card:hover {
+  border-color: #D1DBD6;
+  box-shadow: 0 4px 12px rgba(20, 92, 58, 0.06), 0 1px 3px rgba(16, 24, 40, 0.04);
+}
+
+.dark .admin-card {
+  background-color: #121C16;
+  border-color: #1E2E25;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
+}
+
+.dark .admin-card:hover {
+  border-color: #273D30;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.4);
+}
+
+/* Custom Sparkline Animations */
+@keyframes sparklineDraw {
+  from {
+    stroke-dashoffset: 100;
+  }
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+
+.sparkline-path {
+  stroke-dasharray: 100;
+  animation: sparklineDraw 1.2s ease-out forwards;
+}
+
+/* Custom Shimmer Loading State */
+@keyframes shimmer {
+  0% {
+    background-position: -200% 0;
+  }
+  100% {
+    background-position: 200% 0;
+  }
+}
+
+.animate-shimmer {
+  background: linear-gradient(90deg, #F0F4F2 25%, #E4ECE8 50%, #F0F4F2 75%);
+  background-size: 200% 100%;
+  animation: shimmer 1.5s infinite;
+}
+
+.dark .animate-shimmer {
+  background: linear-gradient(90deg, #15221B 25%, #1F3328 50%, #15221B 75%);
+  background-size: 200% 100%;
+  animation: shimmer 1.5s infinite;
+}

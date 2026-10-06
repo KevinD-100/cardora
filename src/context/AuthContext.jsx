@@ -1,0 +1,592 @@
+import React, { createContext, useContext, useState, useEffect, useRef } from 'react';
+import { translations } from '../utils/translations';
+import api, { apiService } from '../services/api';
+
+const AuthContext = createContext();
+
+export const AuthProvider = ({ children }) => {
+  const [token, setToken] = useState(() => {
+    try {
+      const urlParams = new URLSearchParams(window.location.search);
+      const queryToken = urlParams.get('token');
+      if (queryToken) {
+        localStorage.setItem('cardora_token', queryToken);
+        return queryToken;
+      }
+    } catch (e) {}
+    return localStorage.getItem('cardora_token') || null;
+  });
+
+  const knownNotificationIdsRef = useRef(new Set());
+
+  const playNotificationSound = () => {
+    try {
+      const AudioContext = window.AudioContext || window.webkitAudioContext;
+      if (!AudioContext) return;
+      const ctx = new AudioContext();
+      
+      const osc1 = ctx.createOscillator();
+      const gain1 = ctx.createGain();
+      osc1.type = 'sine';
+      osc1.frequency.setValueAtTime(659.25, ctx.currentTime);
+      gain1.gain.setValueAtTime(0.12, ctx.currentTime);
+      gain1.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.2);
+      osc1.connect(gain1);
+      gain1.connect(ctx.destination);
+      osc1.start(ctx.currentTime);
+      osc1.stop(ctx.currentTime + 0.2);
+
+      const osc2 = ctx.createOscillator();
+      const gain2 = ctx.createGain();
+      osc2.type = 'sine';
+      osc2.frequency.setValueAtTime(987.77, ctx.currentTime + 0.15);
+      gain2.gain.setValueAtTime(0.15, ctx.currentTime + 0.15);
+      gain2.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.45);
+      osc2.connect(gain2);
+      gain2.connect(ctx.destination);
+      osc2.start(ctx.currentTime + 0.15);
+      osc2.stop(ctx.currentTime + 0.45);
+    } catch (e) {}
+  };
+
+  const [isAuthenticated, setIsAuthenticated] = useState(() => {
+    try {
+      const urlParams = new URLSearchParams(window.location.search);
+      if (urlParams.get('token')) return true;
+    } catch (e) {}
+    return Boolean(localStorage.getItem('cardora_token'));
+  });
+  const [user, setUser] = useState(() => {
+    try {
+      const cached = localStorage.getItem('cardora_user');
+      return cached ? JSON.parse(cached) : null;
+    } catch (e) {
+      return null;
+    }
+  });
+  const [loadingUser, setLoadingUser] = useState(true);
+
+  // Language State ('en' or 'ml')
+  const [lang, setLang] = useState('en');
+
+  // Farmer Easy Mode State
+  const [easyMode, setEasyMode] = useState(() => {
+    try {
+      return localStorage.getItem('cardora_easy_mode') === 'true';
+    } catch (e) {
+      return false;
+    }
+  });
+
+  // Dark Mode State
+  const [darkMode, setDarkMode] = useState(() => {
+    try {
+      return localStorage.getItem('cardora_dark_mode') === 'true';
+    } catch (e) {
+      return false;
+    }
+  });
+
+  const toggleEasyMode = () => {
+    setEasyMode((prev) => {
+      const next = !prev;
+      try { localStorage.setItem('cardora_easy_mode', String(next)); } catch (e) {}
+      return next;
+    });
+  };
+
+  const toggleDarkMode = () => setDarkMode((prev) => !prev);
+
+  useEffect(() => {
+    const syncProfileFromDB = async () => {
+      try {
+        const urlParams = new URLSearchParams(window.location.search);
+        const queryToken = urlParams.get('token');
+        if (queryToken) {
+          localStorage.setItem('cardora_token', queryToken);
+          setToken(queryToken);
+          setIsAuthenticated(true);
+          // Clean the URL query parameters so token is not exposed in URL bar
+          const cleanUrl = window.location.pathname + window.location.hash;
+          window.history.replaceState({}, document.title, cleanUrl);
+        }
+
+        const storedToken = localStorage.getItem('cardora_token') || queryToken;
+        if (storedToken) {
+          const res = await apiService.getProfile();
+          if (res && res.success && res.user) {
+            setIsAuthenticated(true);
+            const fetchedUser = {
+              _id: res.user._id || res.user.id,
+              id: res.user.id || res.user._id,
+              name: res.user.name || res.user.fullName,
+              fullName: res.user.fullName || res.user.name,
+              username: res.user.username || res.user.email?.split('@')[0],
+              email: res.user.email,
+              phone: res.user.phone || '',
+              location: res.user.location || 'Idukki, Kerala',
+              district: res.user.district || res.user.location || 'Idukki, Kerala',
+              role: res.user.role || 'Farmer',
+              avatar: res.user.avatar || res.user.profileImage || res.user.profilePhoto || '',
+              profileImage: res.user.profileImage || res.user.avatar || '',
+              hasCustomPhoto: res.user.hasCustomPhoto || Boolean(res.user.avatar || res.user.profileImage),
+              bio: res.user.bio || '',
+            };
+            setUser(fetchedUser);
+            localStorage.setItem('cardora_user', JSON.stringify(fetchedUser));
+          } else {
+            localStorage.removeItem('cardora_token');
+            localStorage.removeItem('token');
+            localStorage.removeItem('cardora_user');
+            setToken(null);
+            setUser(null);
+            setIsAuthenticated(false);
+          }
+        } else {
+          setIsAuthenticated(false);
+        }
+      } catch (e) {
+        localStorage.removeItem('cardora_token');
+        localStorage.removeItem('token');
+        localStorage.removeItem('cardora_user');
+        setToken(null);
+        setUser(null);
+        setIsAuthenticated(false);
+      } finally {
+        setLoadingUser(false);
+      }
+    };
+    syncProfileFromDB();
+  }, [token]);
+
+  useEffect(() => {
+    if (darkMode) {
+      document.documentElement.classList.add('dark');
+      try {
+        localStorage.setItem('cardora_dark_mode', 'true');
+      } catch (e) {}
+    } else {
+      document.documentElement.classList.remove('dark');
+      try {
+        localStorage.setItem('cardora_dark_mode', 'false');
+      } catch (e) {}
+    }
+  }, [darkMode]);
+  const [toastMessage, setToastMessage] = useState(null);
+
+  // Voice State
+  const [isSpeaking, setIsSpeaking] = useState(false);
+  const [isListening, setIsListening] = useState(false);
+
+  // App Notifications State
+  const [notifications, setNotifications] = useState(() => {
+    try {
+      const saved = localStorage.getItem('cardora_user_notifications');
+      return saved ? JSON.parse(saved) : [];
+    } catch (e) {
+      return [];
+    }
+  });
+
+  const addNotification = ({ type = 'like', title, body, targetOwner = '', senderName = '' }) => {
+    const newNotif = {
+      id: Date.now(),
+      type,
+      title: title || (type === 'like' ? '❤️ Post Liked!' : '💬 New Comment!'),
+      body: body || '',
+      targetOwner,
+      senderName,
+      time: 'Just now',
+      read: false,
+    };
+    setNotifications((prev) => {
+      const updated = [newNotif, ...prev];
+      try {
+        localStorage.setItem('cardora_user_notifications', JSON.stringify(updated));
+      } catch (e) {}
+      return updated;
+    });
+  };
+
+  const fetchUserNotifications = async () => {
+    try {
+      const res = await apiService.getNotifications();
+      if (res && res.success && Array.isArray(res.notifications)) {
+        const fetchedNotifs = res.notifications;
+
+        // Diff tracking: Detect newly arrived unread notifications for real-time alert
+        if (knownNotificationIdsRef.current.size > 0) {
+          const brandNewList = fetchedNotifs.filter(
+            (n) => n._id && !knownNotificationIdsRef.current.has(n._id.toString()) && !n.read
+          );
+
+          if (brandNewList.length > 0) {
+            playNotificationSound();
+            const latest = brandNewList[0];
+            const toastMsg = `🔔 ${latest.title}: ${latest.message || latest.body || 'New alert'}`;
+            setToastMessage(toastMsg);
+            setTimeout(() => setToastMessage(null), 5000);
+          }
+        }
+
+        // Add all fetched notification IDs to known set
+        fetchedNotifs.forEach((n) => {
+          if (n._id) knownNotificationIdsRef.current.add(n._id.toString());
+        });
+
+        setNotifications(fetchedNotifs);
+      }
+    } catch (err) {}
+  };
+
+  const currentUserId = user?._id || user?.id || '';
+
+  useEffect(() => {
+    if (currentUserId) {
+      fetchUserNotifications();
+      const interval = setInterval(fetchUserNotifications, 15000);
+      return () => clearInterval(interval);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentUserId]);
+
+  const clearNotifications = () => {
+    setNotifications([]);
+    try {
+      localStorage.removeItem('cardora_user_notifications');
+    } catch (e) {}
+  };
+
+  const markNotificationsRead = () => {
+    setNotifications((prev) => {
+      const updated = prev.map((n) => ({ ...n, read: true }));
+      try {
+        localStorage.setItem('cardora_user_notifications', JSON.stringify(updated));
+      } catch (e) {}
+      return updated;
+    });
+    if (typeof apiService.markNotificationRead === 'function') {
+      apiService.markNotificationRead('all').catch(() => {});
+    } else if (typeof apiService.markAsRead === 'function') {
+      apiService.markAsRead('all').catch(() => {});
+    }
+  };
+
+  const showToast = (msg) => {
+    setToastMessage(msg);
+    setTimeout(() => setToastMessage(null), 4000);
+  };
+
+  const login = async (credentials, passwordArg) => {
+    try {
+      const payload = typeof credentials === 'object' 
+        ? credentials 
+        : { email: credentials, usernameOrEmail: credentials, password: passwordArg };
+      const res = await apiService.login(payload);
+      if (res && res.success) {
+        if (res.token) {
+          localStorage.setItem('cardora_token', res.token);
+          localStorage.setItem('token', res.token);
+          setToken(res.token);
+        }
+        if (res.user) {
+          const userData = {
+            id: res.user.id || res.user._id,
+            _id: res.user._id || res.user.id,
+            fullName: res.user.fullName || res.user.name || res.user.username || 'Planter',
+            name: res.user.name || res.user.fullName || res.user.username || 'Planter',
+            username: res.user.username || '',
+            email: res.user.email || '',
+            phone: res.user.phone || '',
+            location: res.user.location || 'Idukki, Kerala',
+            district: res.user.district || res.user.location || 'Idukki, Kerala',
+            role: res.user.role || 'Farmer',
+            avatar: res.user.avatar || res.user.profileImage || '',
+            profileImage: res.user.profileImage || res.user.avatar || '',
+            hasCustomPhoto: Boolean(res.user.avatar || res.user.profileImage),
+            bio: res.user.bio || '',
+          };
+          setUser(userData);
+          localStorage.setItem('cardora_user', JSON.stringify(userData));
+        }
+        setIsAuthenticated(true);
+        showToast(`Welcome back 👋 ${res.user?.fullName || res.user?.name || res.user?.email || 'Planter'}`);
+        return { success: true };
+      } else {
+        const errorMsg = res?.message || 'Invalid email or password';
+        showToast(errorMsg);
+        return { success: false, message: errorMsg };
+      }
+    } catch (err) {
+      const errorMsg = err.response?.data?.message || err.message || 'Login failed. Please check your credentials or backend connection.';
+      showToast(errorMsg);
+      return { success: false, message: errorMsg };
+    }
+  };
+
+  const signup = async (userData) => {
+    try {
+      const res = await apiService.signup(userData);
+      if (res && res.success) {
+        if (res.token) {
+          localStorage.setItem('cardora_token', res.token);
+          localStorage.setItem('token', res.token);
+          setToken(res.token);
+        }
+        if (res.user) {
+          const newUserData = {
+            id: res.user.id || res.user._id,
+            fullName: res.user.fullName || res.user.name || userData.fullName,
+            name: res.user.name || userData.fullName,
+            username: res.user.username || userData.username,
+            email: res.user.email || userData.email,
+            phone: res.user.phone || userData.phone || '',
+            location: res.user.location || userData.location || 'Idukki, Kerala',
+            district: res.user.district || res.user.location || userData.location || 'Idukki, Kerala',
+            role: res.user.role || userData.role || 'Farmer',
+            avatar: res.user.avatar || res.user.profileImage || userData.profileImage || '',
+            profileImage: res.user.profileImage || res.user.avatar || userData.profileImage || '',
+            hasCustomPhoto: Boolean(res.user.avatar || res.user.profileImage || userData.profileImage),
+            bio: '',
+          };
+          setUser(newUserData);
+          localStorage.setItem('cardora_user', JSON.stringify(newUserData));
+        }
+        setIsAuthenticated(true);
+        showToast(`Welcome ${userData.fullName || userData.username} 👋 Account created!`);
+        return { success: true };
+      } else {
+        const errorMsg = res?.message || 'Registration failed';
+        showToast(errorMsg);
+        return { success: false, message: errorMsg };
+      }
+    } catch (err) {
+      const errorMsg = err.response?.data?.message || err.message || 'Registration failed';
+      showToast(errorMsg);
+      return { success: false, message: errorMsg };
+    }
+  };
+
+  const googleSignIn = async (googleData = {}) => {
+    try {
+      const res = await apiService.googleLogin(googleData);
+      if (res && res.success && res.user && res.token) {
+        localStorage.setItem('cardora_token', res.token);
+        setToken(res.token);
+
+        const gUser = {
+          id: res.user.id || res.user._id,
+          fullName: res.user.fullName || res.user.name || googleData.name,
+          name: res.user.name || res.user.fullName || googleData.name,
+          username: res.user.username || res.user.email?.split('@')[0],
+          email: res.user.email,
+          phone: res.user.phone || '',
+          location: res.user.location || 'Idukki, Kerala',
+          district: res.user.district || res.user.location || 'Idukki, Kerala',
+          role: res.user.role || 'Farmer',
+          avatar: res.user.avatar || res.user.profileImage || res.user.profilePhoto || googleData.profileImage || '',
+          profileImage: res.user.profileImage || res.user.avatar || googleData.profileImage || '',
+        };
+        setUser(gUser);
+        localStorage.setItem('cardora_user', JSON.stringify(gUser));
+        setIsAuthenticated(true);
+        showToast(`Signed in as ${gUser.email}!`);
+        return { success: true, token: res.token, user: gUser };
+      } else {
+        const errorMsg = res?.message || 'Google Authentication failed. Please try again.';
+        showToast(errorMsg);
+        return { success: false, message: errorMsg };
+      }
+    } catch (err) {
+      const errorMsg = err.response?.data?.message || err.message || 'Google Authentication failed';
+      showToast(errorMsg);
+      return { success: false, message: errorMsg };
+    }
+  };
+
+  const logout = async () => {
+    try {
+      await apiService.logout();
+    } catch (err) {}
+    localStorage.removeItem('cardora_token');
+    localStorage.removeItem('token');
+    localStorage.removeItem('cardora_user');
+    localStorage.removeItem('user');
+    setToken(null);
+    setUser(null);
+    setIsAuthenticated(false);
+    showToast('Logged out of Cardora.');
+  };
+
+  const toggleExpertMode = async () => {
+    const updated = !(user?.isExpert);
+    setUser((prev) => ({ ...prev, isExpert: updated }));
+    try {
+      await api.put('/users/profile', { isExpert: updated });
+    } catch (e) {
+      console.warn('Backend expert mode toggle notice:', e.message);
+    }
+    showToast(updated ? 'Expert Mode Enabled! Workspace Unlocked.' : 'Expert Mode Disabled.');
+  };
+
+  const updateProfile = async (updatedData) => {
+    const finalPhoto = updatedData.avatar || updatedData.profileImage || updatedData.profilePhoto;
+    
+    // 1. Immediately update UI state and localStorage in real-time
+    setUser((prev) => {
+      const activePhoto = finalPhoto || prev?.avatar || prev?.profileImage || prev?.profilePhoto || '';
+      const merged = {
+        ...prev,
+        ...updatedData,
+        name: updatedData.fullName || updatedData.name || prev?.name || prev?.fullName || '',
+        fullName: updatedData.fullName || updatedData.name || prev?.fullName || prev?.name || '',
+        avatar: activePhoto,
+        profileImage: activePhoto,
+        profilePhoto: activePhoto,
+        hasCustomPhoto: Boolean(activePhoto),
+        district: updatedData.district || updatedData.location || prev?.district || prev?.location || 'Idukki, Kerala',
+        location: updatedData.location || updatedData.district || prev?.location || 'Idukki, Kerala',
+        phone: updatedData.phone !== undefined ? updatedData.phone : (prev?.phone || ''),
+        bio: updatedData.bio !== undefined ? updatedData.bio : (prev?.bio || ''),
+        role: updatedData.role || prev?.role || 'Farmer',
+      };
+      try {
+        localStorage.setItem('cardora_user', JSON.stringify(merged));
+      } catch (e) {}
+      return merged;
+    });
+
+    // 2. Persist to MongoDB Atlas backend
+    try {
+      const res = await apiService.updateProfile(updatedData);
+      if (res && res.success && res.user) {
+        setUser((prev) => {
+          const img = res.user.avatar || res.user.profileImage || res.user.profilePhoto || prev?.avatar || prev?.profileImage || '';
+          const finalUser = {
+            ...prev,
+            ...res.user,
+            id: res.user.id || res.user._id || prev?.id,
+            fullName: res.user.fullName || res.user.name || prev?.fullName || '',
+            name: res.user.name || res.user.fullName || prev?.name || '',
+            avatar: img,
+            profileImage: img,
+            profilePhoto: img,
+            hasCustomPhoto: Boolean(img),
+            phone: res.user.phone !== undefined ? res.user.phone : prev?.phone,
+            location: res.user.location || prev?.location,
+            district: res.user.district || res.user.location || prev?.district,
+            bio: res.user.bio !== undefined ? res.user.bio : prev?.bio,
+            role: res.user.role || prev?.role,
+          };
+          try {
+            localStorage.setItem('cardora_user', JSON.stringify(finalUser));
+          } catch (e) {}
+          return finalUser;
+        });
+      }
+    } catch (e) {}
+    showToast('Profile updated & saved to MongoDB Atlas!');
+  };
+
+  // Translation helper function
+  const t = (key) => {
+    return translations[lang]?.[key] || translations['en']?.[key] || key;
+  };
+
+  const toggleLang = () => {
+    setLang((prev) => (prev === 'en' ? 'ml' : 'en'));
+  };
+
+  // Text-To-Speech
+  const speakText = (text, forcedLang = lang) => {
+    if (!('speechSynthesis' in window)) {
+      showToast('Text-to-Speech not supported in browser.');
+      return;
+    }
+    window.speechSynthesis.cancel();
+    const utterance = new SpeechSynthesisUtterance(text);
+    utterance.lang = forcedLang === 'ml' ? 'ml-IN' : 'en-US';
+    utterance.rate = 0.95;
+    utterance.onstart = () => setIsSpeaking(true);
+    utterance.onend = () => setIsSpeaking(false);
+    utterance.onerror = () => setIsSpeaking(false);
+    window.speechSynthesis.speak(utterance);
+  };
+
+  // Speech-To-Text
+  const listenSpeech = (onResultCallback) => {
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (!SpeechRecognition) {
+      showToast('Speech recognition not supported in this browser.');
+      return;
+    }
+    const recognition = new SpeechRecognition();
+    recognition.lang = lang === 'ml' ? 'ml-IN' : 'en-US';
+    recognition.continuous = false;
+    recognition.interimResults = false;
+
+    recognition.onstart = () => {
+      setIsListening(true);
+      showToast(t('listening'));
+    };
+
+    recognition.onresult = (event) => {
+      const transcript = event.results[0][0].transcript;
+      setIsListening(false);
+      if (onResultCallback) onResultCallback(transcript);
+    };
+
+    recognition.onerror = () => {
+      setIsListening(false);
+    };
+
+    recognition.onend = () => {
+      setIsListening(false);
+    };
+
+    recognition.start();
+  };
+
+  return (
+    <AuthContext.Provider
+      value={{
+        token,
+        setToken,
+        isAuthenticated,
+        loadingUser,
+        setLoadingUser,
+        user,
+        login,
+        signup,
+        googleSignIn,
+        logout,
+        toggleExpertMode,
+        updateProfile,
+        lang,
+        setLang,
+        toggleLang,
+        t,
+        darkMode,
+        setDarkMode,
+        toggleDarkMode,
+        easyMode,
+        setEasyMode,
+        toggleEasyMode,
+        toastMessage,
+        showToast,
+        speakText,
+        isSpeaking,
+        listenSpeech,
+        isListening,
+        notifications,
+        addNotification,
+        clearNotifications,
+        markNotificationsRead,
+      }}
+    >
+      {children}
+    </AuthContext.Provider>
+  );
+};
+
+export const useAuth = () => useContext(AuthContext);

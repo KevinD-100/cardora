@@ -1,0 +1,114 @@
+import React from 'react';
+import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
+import { AuthProvider, useAuth } from './context/AuthContext';
+import { VoiceNavigationProvider } from './context/VoiceNavigationContext';
+import VoiceNavigationOverlay from './components/voice/VoiceNavigationOverlay';
+import Home from './pages/Home';
+import Auth from './pages/Auth';
+import Dashboard from './pages/Dashboard';
+import AcceptInvitation from './pages/AcceptInvitation';
+import NotFound from './pages/NotFound';
+
+import PrivacyPolicy from './pages/PrivacyPolicy';
+import TermsOfService from './pages/TermsOfService';
+import SecurityProtocol from './pages/SecurityProtocol';
+
+// Protected Route for Dashboard & Sub-pages
+const ProtectedDashboard = () => {
+  const { isAuthenticated, loadingUser } = useAuth();
+
+  if (loadingUser) {
+    return (
+      <div className="min-h-screen bg-[#F8FAF7] flex items-center justify-center">
+        <div className="text-center space-y-3">
+          <div className="w-10 h-10 border-4 border-[#1F5E3B] border-t-transparent rounded-full animate-spin mx-auto"></div>
+          <p className="text-xs font-bold text-[#1F5E3B]">Authenticating Cardora Session...</p>
+        </div>
+      </div>
+    );
+  }
+
+  return isAuthenticated ? <Dashboard /> : <Navigate to="/auth?mode=login" replace />;
+};
+
+// Auth Route Redirector (if already logged in, go to dashboard)
+const AuthRoute = () => {
+  const { isAuthenticated, loadingUser } = useAuth();
+
+  if (loadingUser) {
+    return (
+      <div className="min-h-screen bg-[#F8FAF7] flex items-center justify-center">
+        <div className="text-center space-y-3">
+          <div className="w-10 h-10 border-4 border-[#1F5E3B] border-t-transparent rounded-full animate-spin mx-auto"></div>
+          <p className="text-xs font-bold text-[#1F5E3B]">Authenticating Cardora Session...</p>
+        </div>
+      </div>
+    );
+  }
+
+  return isAuthenticated ? <Navigate to="/dashboard" replace /> : <Auth />;
+};
+
+const MainContent = () => {
+  const { toastMessage } = useAuth();
+
+  return (
+    <div className="relative">
+      {/* Global Brand Toast Notification */}
+      {toastMessage && (
+        <div className="fixed top-6 right-6 z-50 px-5 py-3 rounded-full bg-[#1F5E3B] text-white font-extrabold text-xs shadow-2xl border border-[#5C8D4E] animate-bounce flex items-center gap-2">
+          <span>🌿</span>
+          <span>{toastMessage}</span>
+        </div>
+      )}
+
+      <Routes>
+        {/* Landing Page */}
+        <Route path="/" element={<Home />} />
+        <Route path="/home" element={<Home />} />
+
+        {/* Authentication Routes */}
+        <Route path="/auth" element={<AuthRoute />} />
+        <Route path="/login" element={<AuthRoute />} />
+        <Route path="/signup" element={<AuthRoute />} />
+        <Route path="/forgot-password" element={<AuthRoute />} />
+        <Route path="/accept-invitation" element={<AcceptInvitation />} />
+
+        {/* Public Legal Pages */}
+        <Route path="/privacy" element={<PrivacyPolicy />} />
+        <Route path="/privacy-policy" element={<PrivacyPolicy />} />
+        <Route path="/terms" element={<TermsOfService />} />
+        <Route path="/terms-of-service" element={<TermsOfService />} />
+        <Route path="/security" element={<SecurityProtocol />} />
+        <Route path="/security-protocol" element={<SecurityProtocol />} />
+
+        {/* Main Application Dashboard & Sub-page routes */}
+        <Route path="/dashboard" element={<ProtectedDashboard />} />
+        <Route path="/plantation" element={<ProtectedDashboard />} />
+        <Route path="/recommendations" element={<ProtectedDashboard />} />
+        <Route path="/community" element={<ProtectedDashboard />} />
+        <Route path="/marketplace" element={<ProtectedDashboard />} />
+        <Route path="/admin" element={<ProtectedDashboard />} />
+        <Route path="/profile" element={<Navigate to="/dashboard" replace />} />
+
+        {/* 404 Page Not Found */}
+        <Route path="*" element={<NotFound />} />
+      </Routes>
+    </div>
+  );
+};
+
+function App() {
+  return (
+    <Router>
+      <AuthProvider>
+        <VoiceNavigationProvider>
+          <MainContent />
+          <VoiceNavigationOverlay />
+        </VoiceNavigationProvider>
+      </AuthProvider>
+    </Router>
+  );
+}
+
+export default App;
